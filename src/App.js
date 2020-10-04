@@ -12,12 +12,12 @@ const axiosGitHubGraphQL = axios.create({
 
 const TITLE = 'React GraphQL GitHub Client';
 
-const getIssuesOfRepositoryQuery = (organization, repository) => `
-  {
-    organization(login: "${organization}") {
+const GET_ISSUES_OF_REPOSITORY = `
+  query ($organization: String!, $repository: String!) {
+    organization(login: $organization) {
       name
       url
-      repository(name: "${repository}") {
+      repository(name: $repository) {
         name
         url
         issues(last: 5) {
@@ -35,12 +35,10 @@ const getIssuesOfRepositoryQuery = (organization, repository) => `
 `;
 
 const getIssuesOfRepository = path => {
+  const [organization, repository] = path.split('/');
   return axiosGitHubGraphQL.post('', {
-    // We could have defined "organization" and "repository" as:
-    //     const [organization, repository] = path.split('/');
-    // and passed them as arguments, but the way below is more
-    // concise since we don't need to use them anywhere else.
-    query: getIssuesOfRepositoryQuery(...path.split('/')),
+    query: GET_ISSUES_OF_REPOSITORY,
+    variables: {organization, repository},
   });
 }
 
