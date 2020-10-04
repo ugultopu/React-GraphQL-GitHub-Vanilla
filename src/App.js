@@ -34,6 +34,16 @@ const getIssuesOfRepositoryQuery = (organization, repository) => `
   }
 `;
 
+const getIssuesOfRepository = path => {
+  return axiosGitHubGraphQL.post('', {
+    // We could have defined "organization" and "repository" as:
+    //     const [organization, repository] = path.split('/');
+    // and passed them as arguments, but the way below is more
+    // concise since we don't need to use them anywhere else.
+    query: getIssuesOfRepositoryQuery(...path.split('/')),
+  });
+}
+
 class App extends Component {
   state = {
     path: 'the-road-to-learn-react/the-road-to-learn-react',
@@ -55,17 +65,15 @@ class App extends Component {
   }
 
   onFetchFromGitHub = path => {
-    const [organization, repository] = path.split('/');
-    axiosGitHubGraphQL
-      .post('', {
-        query: getIssuesOfRepositoryQuery(organization, repository),
-      })
-      .then(result => {
-        this.setState({
-          organization: result.data.data.organization,
-          errors: result.data.errors,
-        });
+    getIssuesOfRepository(path).then(result => {
+      const {data: {organization}, errors} = result.data;
+      this.setState({
+        // Equivalent to: organization: result.data.data.organization,
+        organization,
+        // Equivalent to: errors: result.data.errors,
+        errors,
       });
+    })
   };
 
   render() {
@@ -92,7 +100,9 @@ class App extends Component {
           />
           <button type="submit">Search</button>
         </form>
+
         <hr />
+
         {organization ? (
           <Organization {...{organization, errors}}
           />
