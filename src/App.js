@@ -44,6 +44,16 @@ const getIssuesOfRepository = path => {
   });
 }
 
+const resolveIssuesQuery = queryResult => {
+  const {data: {organization}, errors} = queryResult.data;
+  /*
+   * Equivalent to:
+   *     organization: result.data.data.organization,
+   *     errors: result.data.errors,
+   */
+  return {organization, errors};
+};
+
 class App extends Component {
   state = {
     path: 'the-road-to-learn-react/the-road-to-learn-react',
@@ -65,15 +75,9 @@ class App extends Component {
   }
 
   onFetchFromGitHub = path => {
-    getIssuesOfRepository(path).then(result => {
-      const {data: {organization}, errors} = result.data;
-      this.setState({
-        // Equivalent to: organization: result.data.data.organization,
-        organization,
-        // Equivalent to: errors: result.data.errors,
-        errors,
-      });
-    })
+    getIssuesOfRepository(path).then(queryResult => {
+      this.setState(resolveIssuesQuery(queryResult))
+    });
   };
 
   render() {
