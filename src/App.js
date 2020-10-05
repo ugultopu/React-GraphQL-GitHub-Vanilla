@@ -127,6 +127,23 @@ const addStarToRepository = repositoryId => {
   });
 };
 
+const resolveAddStarMutation = mutationResult => state => {
+  const {
+    viewerHasStarred,
+  } = mutationResult.data.data.addStar.starrable;
+
+  return {
+    ...state,
+    organization: {
+      ...state.organization,
+      repository: {
+        ...state.organization.repository,
+        viewerHasStarred,
+      },
+    },
+  };
+};
+
 class App extends Component {
   state = {
     path: 'the-road-to-learn-react/the-road-to-learn-react',
@@ -161,7 +178,9 @@ class App extends Component {
   };
 
   onStarRepository = (repositoryId, viewerHasStarred) => {
-    addStarToRepository(repositoryId);
+    addStarToRepository(repositoryId).then(mutationResult => {
+      this.setState(resolveAddStarMutation(mutationResult));
+    });
   };
 
   render() {
