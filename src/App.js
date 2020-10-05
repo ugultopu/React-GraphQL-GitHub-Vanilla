@@ -13,14 +13,18 @@ const axiosGitHubGraphQL = axios.create({
 const TITLE = 'React GraphQL GitHub Client';
 
 const GET_ISSUES_OF_REPOSITORY = `
-  query ($organization: String!, $repository: String!) {
+  query (
+    $organization: String!,
+    $repository: String!,
+    $cursor: String
+  ) {
     organization(login: $organization) {
       name
       url
       repository(name: $repository) {
         name
         url
-        issues(last: 5, states: [OPEN]) {
+        issues(first: 5, after: $cursor, states: [OPEN]) {
           edges {
             node {
               id
@@ -36,28 +40,72 @@ const GET_ISSUES_OF_REPOSITORY = `
               }
             }
           }
+          totalCount
+          pageInfo {
+            endCursor
+            hasNextPage
+          }
         }
       }
     }
   }
 `;
 
-const getIssuesOfRepository = path => {
+const getIssuesOfRepository = (path, cursor) => {
   const [organization, repository] = path.split('/');
   return axiosGitHubGraphQL.post('', {
     query: GET_ISSUES_OF_REPOSITORY,
-    variables: {organization, repository},
+    variables: {organization, repository, cursor},
   });
 }
 
-const resolveIssuesQuery = queryResult => {
+/*
+ * Had we NOT used Strict Mode in React, the function below could have
+ * simply been:
+ *
+ *     const resolveIssuesQuery = (queryResult, cursor) => state => {
+ *       const {data: {organization}, errors} = queryResult.data;
+ *
+ *       if (!cursor) return {organization, errors};
+ *
+ *       organization.repository.issues.edges = [
+ *         ...state.organization.repository.issues.edges,
+ *         ...organization.repository.issues.edges,
+ *       ];
+ *
+ *       return {organization, errors};
+ *     };
+ *
+ * This is because the version above MUTATES the arguments. That is, it
+ * is not pure. Hence, when React calls it twice on purpose (because of
+ * the Strict Mode), the program breaks. The reason that React calls it
+ * twice is in order to detect if there are any problems ("hacks", bad
+ * practices) such as this (such as modifying the function arguments
+ * instead of treating them as immutable).
+ */
+
+const resolveIssuesQuery = (queryResult, cursor) => state => {
   const {data: {organization}, errors} = queryResult.data;
-  /*
-   * Equivalent to:
-   *     organization: result.data.data.organization,
-   *     errors: result.data.errors,
-   */
-  return {organization, errors};
+
+  if (!cursor) return {organization, errors};
+
+  const { edges: oldIssues } = state.organization.repository.issues,
+        { edges: newIssues } = organization.repository.issues,
+        updatedIssues = [...oldIssues, ...newIssues];
+
+  return {
+    organization: {
+      ...organization,
+      repository: {
+        ...organization.repository,
+        issues: {
+          ...organization.repository.issues,
+          edges: updatedIssues
+        },
+      },
+    },
+    errors,
+  };
 };
 
 class App extends Component {
@@ -80,18 +128,28 @@ class App extends Component {
     event.preventDefault();
   }
 
-  onFetchFromGitHub = path => {
-    getIssuesOfRepository(path).then(queryResult => {
-      this.setState(resolveIssuesQuery(queryResult))
+  onFetchFromGitHub = (path, cursor) => {
+    getIssuesOfRepository(path, cursor).then(queryResult => {
+      this.setState(resolveIssuesQuery(queryResult, cursor))
     });
   };
 
+  onFetchMoreIssues = () => {
+    this.onFetchFromGitHub(
+      this.state.path,
+      this.state.organization.repository.issues.pageInfo.endCursor
+    );
+  }
+
   render() {
     const {
-      path,
-      organization,
-      errors,
-    } = this.state;
+      state: {
+        path,
+        organization,
+        errors,
+      },
+      onFetchMoreIssues
+    } = this;
 
     return (
       <div>
@@ -114,7 +172,7 @@ class App extends Component {
         <hr />
 
         {organization ? (
-          <Organization {...{organization, errors}}
+          <Organization {...{organization, errors, onFetchMoreIssues}}
           />
         ) : (
           <p>No information yet...</p>
@@ -124,7 +182,7 @@ class App extends Component {
   }
 }
 
-const Organization = ({ organization, errors }) => {
+const Organization = ({ organization, errors, onFetchMoreIssues }) => {
   if (errors) {
     return (
       <p>
@@ -139,12 +197,15 @@ const Organization = ({ organization, errors }) => {
         <strong>Issues from Organization:</strong>
         <a href={organization.url}>{organization.name}</a>
       </p>
-      <Repository repository={organization.repository} />
+      <Repository
+        repository={organization.repository}
+        onFetchMoreIssues={onFetchMoreIssues}
+      />
     </div>
   );
 };
 
-const Repository = ({ repository }) => (
+const Repository = ({ repository, onFetchMoreIssues }) => (
   <div>
     <p>
       <strong>In Repository:</strong>
@@ -164,6 +225,12 @@ const Repository = ({ repository }) => (
         </li>
       ))}
     </ul>
+
+    <hr />
+
+    {repository.issues.pageInfo.hasNextPage && (
+      <button onClick={onFetchMoreIssues}>More</button>
+    )}
   </div>
 );
 
