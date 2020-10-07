@@ -53,9 +53,14 @@ const GET_ISSUES_OF_REPOSITORY = `
   }
 `;
 
-const ADD_STAR = `
+const ADD_OR_REMOVE_STAR = shouldRemoveStar => `
   mutation ($repositoryId: ID!) {
-    addStar(input:{starrableId:$repositoryId}) {
+    ${shouldRemoveStar
+      ?
+      'remove'
+      :
+      'add'
+    }Star(input:{starrableId:$repositoryId}) {
       starrable {
         viewerHasStarred
       }
@@ -120,18 +125,19 @@ const resolveIssuesQuery = (queryResult, cursor) => state => {
   };
 };
 
-const addStarToRepository = repositoryId => {
+const addOrRemoveStar = (repositoryId, shouldRemoveStar = false) => {
   return axiosGitHubGraphQL.post('', {
-    query: ADD_STAR,
+    query: ADD_OR_REMOVE_STAR(shouldRemoveStar),
     variables: { repositoryId },
   });
 };
 
-const resolveAddStarMutation = mutationResult => state => {
+const resolveStarMutation = (mutationResult, viewerDidStar) => state =>
+{
   const {
     viewerHasStarred,
-  } = mutationResult.data.data.addStar.starrable;
-
+  } = mutationResult.data
+      .data[`${viewerDidStar ? 'remove' : 'add'}Star`].starrable;
   return {
     ...state,
     organization: {
@@ -178,8 +184,14 @@ class App extends Component {
   };
 
   onStarRepository = (repositoryId, viewerHasStarred) => {
-    addStarToRepository(repositoryId).then(mutationResult => {
-      this.setState(resolveAddStarMutation(mutationResult));
+    addOrRemoveStar(
+      repositoryId,
+      viewerHasStarred,
+    ).then(mutationResult => {
+      this.setState(resolveStarMutation(
+        mutationResult,
+        viewerHasStarred,
+      ));
     });
   };
 
